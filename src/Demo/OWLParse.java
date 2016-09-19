@@ -3,6 +3,7 @@ package Demo;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
@@ -40,6 +41,7 @@ import org.semanticweb.owlapi.reasoner.OWLReasoner;
 import org.semanticweb.owlapi.reasoner.structural.StructuralReasonerFactory;
 import org.semanticweb.owlapi.util.DefaultPrefixManager;
 import org.semanticweb.owlapi.util.OWLEntityRemover;
+import org.semanticweb.owlapi.util.SimpleIRIMapper;
 import org.semanticweb.owlapi.vocab.OWL2Datatype;
 
 import com.hp.hpl.jena.rdf.model.Resource;
@@ -47,6 +49,8 @@ import com.hp.hpl.jena.util.FileManager;
 
 class OWLParse{ 
 	private static InputStream in;
+	private static InputStream in1;
+	private static InputStream in2;
 	private static IRI physicalIRI;
 	private static OWLOntologyManager manager;
 	private static OWLDataFactory factory;
@@ -55,15 +59,34 @@ class OWLParse{
 	private static PrefixManager prefix;
 	//构造函数初始化
 	 OWLParse(){
-		in = FileManager.get().open("F:/code/OWL文件/animal1.owl");
-		physicalIRI = IRI.create("file:/F:/code/OWL文件/animal1.owl");
+
+		in = FileManager.get().open("F:/code/OWL文件/pet1.owl");
 		manager = OWLManager.createOWLOntologyManager();
 		factory = manager.getOWLDataFactory();
 		try{
+		
+		//映射import的human1本体
+		IRI ontologyIRI1 = IRI.create("http://www.semanticweb.org/ontologies/domain/2016/human2.owl");
+		IRI physicalIRI1 = IRI.create("file:/F:/code/OWL文件/human2.owl");
+		SimpleIRIMapper mapper1 = new SimpleIRIMapper(ontologyIRI1, physicalIRI1);
+		manager.addIRIMapper(mapper1);
+		
+		//映射import的animal本体
+		IRI ontologyIRI2 = IRI.create("http://www.semanticweb.org/ontologies/domain/2016/animal.owl");
+		IRI physicalIRI2 = IRI.create("file:/F:/code/OWL文件/animal.owl");
+		SimpleIRIMapper mapper2 = new SimpleIRIMapper(ontologyIRI2, physicalIRI2);
+		manager.addIRIMapper(mapper2);
+		
+		IRI ontologyIRI = IRI.create("http://www.semanticweb.org/ontologies/application/2016/pet1.owl");
+		physicalIRI = IRI.create("file:/F:/code/OWL文件/pet1.owl");
+		SimpleIRIMapper mapper = new SimpleIRIMapper(ontologyIRI, physicalIRI);
+        manager.addIRIMapper(mapper);
+        
 	    ont = manager.loadOntologyFromOntologyDocument(in);
 		IRI documentIRI = manager.getOntologyDocumentIRI(ont);
 		defaultPrefix = "http://www.semanticweb.org/ontologies/domain/2016/animal.owl#";
 		prefix = new DefaultPrefixManager(defaultPrefix);
+
 		
 		}catch (OWLOntologyCreationException e1) {
 			// TODO Auto-generated catch block
@@ -94,17 +117,63 @@ class OWLParse{
 		Set<OWLClassExpression> superclass = sub.getSuperClasses(ont);
 		return superclass;
 	}
-	//得到子节点集
+	//获取父类集合
+	public static Set<OWLClassExpression> Parents(OWLClass concept){
+		OWLClass sub = concept;
+		Set<OWLClassExpression> superclass = sub.getSuperClasses(ont);
+		Iterator<OWLClassExpression> it = superclass.iterator();
+		while(it.hasNext()){
+			OWLClass c = (OWLClass) it.next();
+			Set<OWLClassExpression> parent = GetParents(c);
+			superclass.addAll(parent);
+		}
+		return superclass;
+		
+	}
+	//得到子节点集合
 	public static Set<OWLClassExpression> GetChildren(OWLClass concept){
 		Set<OWLClassExpression> subclass = concept.getSubClasses(ont);
 		
 		return subclass;
+	}
+	//获取子类集合（两级深度）
+	public static Set<OWLClassExpression> Childs(OWLClass concept){
+		OWLClass sup = concept;
+		Set<OWLClassExpression> subclass = sup.getSubClasses(ont);
+		Iterator<OWLClassExpression> it = subclass.iterator();
+		while(it.hasNext()){
+			OWLClass c = (OWLClass) it.next();
+			Set<OWLClassExpression> child = GetChildren(c);
+			subclass.addAll(child);
+		}
+		return subclass;
+		
+	}
+	//获取兄弟概念集合
+	public static Set<OWLClassExpression> Siblings(OWLClass concept){
+		OWLClass sub = concept;
+		Set<OWLClassExpression> sibling = new HashSet<>();
+		Set<OWLClassExpression> superclass = sub.getSuperClasses(ont);
+		Iterator<OWLClassExpression> it = superclass.iterator();
+		while(it.hasNext()){
+			OWLClass c = (OWLClass) it.next();
+			Set<OWLClassExpression> child = GetChildren(c);
+			Iterator<OWLClassExpression> it1 = child.iterator();
+			while(it1.hasNext()){
+				OWLClass ch = (OWLClass) it1.next();
+				if(!ch.equals(sub)){
+					sibling.add(ch);
+				}
+			}
+		}
+		return sibling;
 	}
 	//获取概念实例
 	public static Set<OWLIndividual> IndividualOfClass(OWLClass concept){
 		Set<OWLIndividual> individuals = concept.getIndividuals(ont);
 		return individuals;
 	}
+	/*查不到概念的对象属性和数据属性
 	//获取概念对象属性
 		public static Set<OWLObjectProperty> ObjectPropertyOfClass(){
 			Set<OWLObjectProperty> op = ont.getObjectPropertiesInSignature();
@@ -115,9 +184,11 @@ class OWLParse{
 		Set<OWLDataProperty> dp = concept.getDataPropertiesInSignature();
 		return dp;
 	}
+	*/
 
-	 //查找祖先节点
+	//查找祖先节点
 	public static Set<OWLClassExpression> FindAncestor(OWLClass ontconcept){
+	
 		
 		Set<OWLClassExpression> super1 = ontconcept.getSuperClasses(ont);
 		Set<OWLClassExpression> parent = null;
@@ -166,6 +237,7 @@ class OWLParse{
 	//删除概念
 	public static void RemoveConcept(OWLClass concept) {
 			Set<OWLOntology> set = new HashSet<OWLOntology>();
+
 	        set.add(ont);
 			OWLEntityRemover remover = new OWLEntityRemover(manager, set);
 	        concept.accept(remover);
@@ -186,6 +258,18 @@ class OWLParse{
 	public static Set<OWLNamedIndividual> AllIndividual(){
 		Set<OWLNamedIndividual> instance = ont.getIndividualsInSignature();
 		return instance;
+	}
+	//获得实例的数据属性值
+	public static HashMap DPofInstance(OWLIndividual i){
+		HashMap map  = new HashMap<>();
+		map = (HashMap) i.getDataPropertyValues(ont);
+		return map;
+	}
+	//获得实例的对象属性值
+	public static HashMap OPofInstance(OWLIndividual i){
+		HashMap map  = new HashMap<>();
+		map = (HashMap) i.getObjectPropertyValues(ont);
+		return map;
 	}
 	//获得实例的所属概念
 	public static Set<OWLClassExpression> ClassOfIndividual(OWLIndividual instance){
@@ -312,7 +396,7 @@ class OWLParse{
 		}
 		return super1;
 	}
-	//获取领域集
+	//获取定义域集
 	public static Set<OWLClassExpression> ObjectPropertyDomain(OWLObjectProperty op){
 		Set<OWLClassExpression> domain = op.getDomains(ont);
 		return domain;
@@ -465,5 +549,187 @@ class OWLParse{
 			e.printStackTrace();
 		}
 	}
+/*
+ * ********************************获取概念名称（不包含前缀）******************************
+ */
+	//获取概念名称
+	public static String Concept(OWLClass c){
+		String s = c.toString();
+    	s = s.substring(s.lastIndexOf("#")+1,s.lastIndexOf(">"));
+		return s;
+	}
+	public static String Concept(OWLIndividual i){
+		String s = i.toString();
+    	s = s.substring(s.lastIndexOf("#")+1,s.lastIndexOf(">"));
+		return s;
+	}
+	public static String Concept(OWLDataProperty dp){
+		String s = dp.toString();
+    	s = s.substring(s.lastIndexOf("#")+1,s.lastIndexOf(">"));
+		return s;
+	}
+	public static String Concept(OWLObjectProperty op){
+		String s = op.toString();
+    	s = s.substring(s.lastIndexOf("#")+1,s.lastIndexOf(">"));
+		return s;
+	}
+	public static ArrayList<String> Concept(Set<OWLClassExpression> set){
+		ArrayList<String> arraylist = new ArrayList<>();
+		Iterator<OWLClassExpression> it = set.iterator();
+		while(it.hasNext()){
+			OWLClass sup = (OWLClass) it.next();
+			String s = Concept(sup);
+			arraylist.add(s);
+		}
+		return arraylist;
+	}
+	public static ArrayList<String> Instance(Set<OWLIndividual> set){
+		ArrayList<String> arraylist = new ArrayList<>();
+		Iterator<OWLIndividual> it = set.iterator();
+		while(it.hasNext()){
+			OWLIndividual sup = (OWLIndividual) it.next();
+			String s = Concept(sup);
+			arraylist.add(s);
+		}
+		return arraylist;
+	}
+	public static ArrayList<String> DataProperty(Set<OWLDataProperty> set){
+		ArrayList<String> arraylist = new ArrayList<>();
+		Iterator<OWLDataProperty> it = set.iterator();
+		while(it.hasNext()){
+			OWLDataProperty dp = (OWLDataProperty) it.next();
+			String s = Concept(dp);
+			arraylist.add(s);
+		}
+		return arraylist;
+	}	
+	public static ArrayList<String> ObjectProperty(Set<OWLObjectProperty> set){
+		ArrayList<String> arraylist = new ArrayList<>();
+		Iterator<OWLObjectProperty> it = set.iterator();
+		while(it.hasNext()){
+			OWLObjectProperty op = (OWLObjectProperty) it.next();
+			System.out.println(op);
+			if(op.toString().startsWith("<")){
+				String s = Concept(op);
+				arraylist.add(s);
+				}
+			
+		}
+		return arraylist;
+	}
+	//获取父类集合
+	public static ArrayList<String> Parent(OWLClass c){
+		Set<OWLClassExpression> parent = Parents(c);
+		return Concept(parent);
+	}
+	//获取子类集合
+	public static ArrayList<String> Child(OWLClass c){
+		Set<OWLClassExpression> child = Childs(c);
+		return Concept(child);
+	}
+	//获取兄弟集合
+	public static ArrayList<String> Sibling(OWLClass c){
+		Set<OWLClassExpression> sibling = Siblings(c);
+		return Concept(sibling);
+	}
+	//获取实例
+	public static ArrayList<String> Individual(OWLClass c){
+		Set<OWLIndividual> individual =IndividualOfClass(c);
+		return Instance(individual);
+	}
+	//数据属性
+	public static ArrayList<String> DPKeys(OWLIndividual i){
 
+		HashMap map  = new HashMap<>();
+		ArrayList<String> arraylist = new ArrayList<>();
+		map = DPofInstance(i);
+		Set set = map.keySet();
+		Iterator it = set.iterator();
+		while(it.hasNext()){
+			OWLDataProperty dp = (OWLDataProperty) it.next();
+			String s = Concept(dp);
+			arraylist.add(s);
+		}
+		return arraylist;
+	}
+	public static ArrayList<String> DPValues(OWLIndividual i){
+
+		HashMap map  = new HashMap<>();
+		ArrayList<String> arraylist = new ArrayList<>();
+		map = DPofInstance(i);
+		Collection collection = map.values();
+		Iterator it = collection.iterator();
+		while(it.hasNext()){
+			String s = it.next().toString();
+	    	s = s.substring(s.indexOf("\"")+1,s.lastIndexOf("\""));
+			arraylist.add(s);
+		}
+		return arraylist;
+	}
+	//对象属性
+	public static ArrayList<String> OPKeys(OWLIndividual i){
+
+		HashMap map  = new HashMap<>();
+		ArrayList<String> arraylist = new ArrayList<>();
+		map = OPofInstance(i);
+		Set set = map.keySet();
+		Iterator it = set.iterator();
+		while(it.hasNext()){
+			OWLObjectProperty op = (OWLObjectProperty) it.next();
+			String s = Concept(op);
+			arraylist.add(s);
+		}
+		return arraylist;
+	}
+	public static ArrayList<String> OPValues(OWLIndividual i){
+
+		HashMap map  = new HashMap<>();
+		ArrayList<String> arraylist = new ArrayList<>();
+		map = OPofInstance(i);
+		Collection collection = map.values();
+		Iterator it = collection.iterator();
+		while(it.hasNext()){
+			String s = it.next().toString();
+	    	s = s.substring(s.lastIndexOf("#")+1,s.lastIndexOf(">"));
+			arraylist.add(s);
+		}
+		return arraylist;
+	}
+	public static ArrayList<String> DPName(){
+		Set<OWLDataProperty> dp = AllDataProperty();
+		return DataProperty(dp);
+	}
+	public static ArrayList<String> OPName(){
+		Set<OWLObjectProperty> op = AllObjectProperty();
+		return ObjectProperty(op);
+	}
+	public static ArrayList<String> DPDomain(OWLDataProperty dp){
+		Set<OWLClassExpression> domain = DatatPropertyDomain(dp);
+		return Concept(domain);
+	}
+	public static ArrayList<String> OPDomain(OWLObjectProperty op){
+		Set<OWLClassExpression> domain = ObjectPropertyDomain(op);
+		return Concept(domain);
+	}
+	public static ArrayList<String> OPRange(OWLObjectProperty op){
+		Set<OWLClassExpression> range = ObjectPropertyRange(op);
+		return Concept(range);
+	}
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
